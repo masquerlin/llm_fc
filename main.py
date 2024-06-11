@@ -2,18 +2,20 @@ import openai, requests, torch
 from functions_use import functions
 import api, json
 import gradio as gr
-qwen_api_url = ''
+
 def run_llm(prompt, history=[], functions=[], sys_prompt= f"You are an useful AI assistant that helps people solve the problem step by step."):
     try:
-        openai.api_base = qwen_api_url
+        openai.api_base = "http://localhost:8009/v1"
         openai.api_key = 'none'
         openai.api_request_timeout = 1 # 设置超时时间为10秒
         messages = []
         messages.extend(history)
+        print(messages)
         if 'function_call_output' in prompt:
-            messages.append({"role": "function", "content": json.dump(prompt.replace('function_call_output: ', ''))})
+            messages.append({"role": "function", "content": json.loads(prompt.replace('function_call_output: ', ''))})
         else:
-            messages.append({"role": "user", "content": "" + prompt})
+            messages.append({"role": "user", name:'', "content": "" + prompt})
+        print(f'after messages********{messages}')
         response = openai.ChatCompletion.create(
             model = "qwen_tog",
             messages = messages,
@@ -23,19 +25,22 @@ def run_llm(prompt, history=[], functions=[], sys_prompt= f"You are an useful AI
             )
         data_res = response['choices'][0]['message']['content']
         function_call = response['choices'][0]['message']['function_call']
+        print(function_call)
         return data_res, function_call
     finally:
         torch_gc()
 def torch_gc():
     print('清除内存')
     if torch.cuda.is_available():
-        with torch.cuda.device('gpu:0'):
+        with torch.cuda.device('cuda:0'):
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
 def process_function(function_call):
     if isinstance(function_call, dict):
         function_name = function_call.get('name')
-        function_parameters = function_call.get('parameters')
+        function_parameters = json.loads(function_call.get('arguments'))
+        print(f"function_parameters***********{function_parameters}")
+        print(type(function_parameters))
         if function_name == 'login':
             login_account = function_parameters.get('login_account')
             password = function_parameters.get('password')
@@ -83,11 +88,17 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
     mylist = list()
     i = 0
     while function_call and i < 3:
+        print(f"i******{i}")
         function_name = function_call.get('name')
-        function_parameters = function_call.get('parameters')
+        function_parameters = json.loads(function_call.get('arguments'))
+        print(f"")
         yield responses, {function_name : 'running'}, {'parameters':function_parameters}, {} 
-        function_response = process_function(function_call)
-        yield responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response
+        try:
+            function_response = process_function(function_call)
+            yield responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response
+        except Exception as e:
+            function_response = {}
+            yield responses, {function_name : 'error'}, {'parameters':function_parameters}, {"error":e}
         new_prompt = 'function_call_output: ' + str(function_response)
         mylist.append(new_prompt)
         answer, function_call = run_llm(prompt=new_prompt, history=message, functions=functions)
@@ -96,7 +107,7 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
         message.append({'role': 'function', 'content': function_response})
         message.append({'role': 'assitant', 'content': answer})
         i += 1
-    pass
+    return responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response
 def clear_session():
     return '', [], {}, {}, {}
 def main():
@@ -115,11 +126,11 @@ def main():
                 clear_history = gr.Button("🧹 clear")
                 sumbit = gr.Button("🚀 submit")
         
-        sumbit.click(model_chat, [textbox, chatbot], [function_json, parameter_json, result_json, chatbot])
+        sumbit.click(model_chat, [textbox, chatbot], [chatbot, function_json, parameter_json, result_json])
         clear_history.click(fn=clear_session,
                             inputs=[],
                             outputs=[textbox, chatbot, function_json, parameter_json, result_json])
-    demo.queue(api_open=False).launch(server_name='localhost', server_port=7860,max_threads=10, height=800, share=False)
+    demo.queue(api_open=False).launch(server_name='0.0.0.0', server_port=7860,max_threads=10, height=800, share=False)
 if __name__ == "__main__":
     main()
 

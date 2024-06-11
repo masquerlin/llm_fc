@@ -1,15 +1,19 @@
 import openai, requests, torch
 from functions_use import functions
-import api
+import api, json
+import gradio as gr
 qwen_api_url = ''
 def run_llm(prompt, history=[], functions=[], sys_prompt= f"You are an useful AI assistant that helps people solve the problem step by step."):
     try:
         openai.api_base = qwen_api_url
         openai.api_key = 'none'
         openai.api_request_timeout = 1 # 设置超时时间为10秒
-        messages=[{"role": "system", "content": sys_prompt}]
+        messages = []
         messages.extend(history)
-        messages.append({"role": "user", "content": "" + prompt})
+        if 'function_call_output' in prompt:
+            messages.append({"role": "function", "content": json.dump(prompt.replace('function_call_output: ', ''))})
+        else:
+            messages.append({"role": "user", "content": "" + prompt})
         response = openai.ChatCompletion.create(
             model = "qwen_tog",
             messages = messages,
@@ -55,16 +59,69 @@ def process_function(function_call):
         result = ''
     return result
 
-def chat(prompt, history):
-    answer, function_call = run_llm(prompt=prompt)
+def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant that helps people solve the problem step by step."):
+    responses = list()
+    message=[{"role": "system", "content": sys_prompt}]
+    if len(history) > 0:
+        for history_msg in enumerate(history):
+            if 'function_call_output' in history_msg[0]:
+                message.append({'role': 'function', 'content': history_msg[0]})
+                message.append({'role': 'assitant', 'content': history_msg[1]})
+            else:
+                message.append({'role': 'user', 'content': history_msg[0]})
+                message.append({'role': 'assitant', 'content': history_msg[1]})
+            responses.append(history_msg)
+    mylist = list()
+    mylist.append(prompt)
+
+    answer, function_call = run_llm(prompt=prompt, history=message, functions=functions)
+    mylist.append(answer)
+    responses.append(mylist)
+    yield responses, {}, {}, {}
+    message.append({'role': 'user', 'content': prompt})
+    message.append({'role': 'assitant', 'content': answer})
+    mylist = list()
     i = 0
     while function_call and i < 3:
+        function_name = function_call.get('name')
+        function_parameters = function_call.get('parameters')
+        yield responses, {function_name : 'running'}, {'parameters':function_parameters}, {} 
         function_response = process_function(function_call)
-        new_answer = answer + str(function_response)
-        answer, function_call = run_llm(prompt=new_answer)
+        yield responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response
+        new_prompt = 'function_call_output: ' + str(function_response)
+        mylist.append(new_prompt)
+        answer, function_call = run_llm(prompt=new_prompt, history=message, functions=functions)
+        mylist.append(answer)
+        responses.append(mylist)
+        message.append({'role': 'function', 'content': function_response})
+        message.append({'role': 'assitant', 'content': answer})
         i += 1
     pass
-
+def clear_session():
+    return '', [], {}, {}, {}
+def main():
+    with gr.Blocks(css="footer {visibility: hidden}",theme=gr.themes.Soft()) as demo:
+        gr.Markdown("""<center><font size=10>llm with function calls</center>""")
+        with gr.Row():
+            function_json = gr.JSON(label='函数执行状态')
+            parameter_json = gr.JSON(label='参数')
+            result_json = gr.JSON(label='结果')
+        with gr.Row(equal_height=False):
+            chatbot = gr.Chatbot(label='智能bot回答',scale=1)
+        with gr.Row():
+            textbox = gr.Textbox(lines=3, label='提出你的问题吧')
+        with gr.Row():
+            with gr.Column():
+                clear_history = gr.Button("🧹 clear")
+                sumbit = gr.Button("🚀 submit")
+        
+        sumbit.click(model_chat, [textbox, chatbot], [function_json, parameter_json, result_json, chatbot])
+        clear_history.click(fn=clear_session,
+                            inputs=[],
+                            outputs=[textbox, chatbot, function_json, parameter_json, result_json])
+    demo.queue(api_open=False).launch(server_name='localhost', server_port=7860,max_threads=10, height=800, share=False)
+if __name__ == "__main__":
+    main()
 
 # parameters = {'num' : 2, 'xx':4}
 # function = getattr(api, 'add', None)

@@ -3,7 +3,7 @@ from functions_use import functions
 import api, json
 import gradio as gr
 
-def run_llm(prompt, history=[], functions=[], sys_prompt= f"You are an useful AI assistant that helps people solve the problem step by step."):
+def run_llm(prompt, history=[], functions=[], function_name='',function_parameters='',sys_prompt= f"You are an useful AI assistant that helps people solve the problem step by step."):
     try:
         openai.api_base = "http://localhost:8009/v1"
         openai.api_key = 'none'
@@ -71,10 +71,10 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
         for history_msg in enumerate(history):
             if 'function_call_output' in history_msg[0]:
                 message.append({'role': 'function', 'name':history_msg[0].split("'s ")[0],'content': history_msg[0].split('function_call_output: ')[1]})
-                message.append({'role': 'assitant', 'content': history_msg[1]})
+                message.append({'role': 'assistant', 'content': history_msg[1]})
             else:
                 message.append({'role': 'user', 'content': history_msg[0]})
-                message.append({'role': 'assitant', 'content': history_msg[1]})
+                message.append({'role': 'assistant', 'content': history_msg[1]})
             responses.append(history_msg)
     mylist = list()
     mylist.append(prompt)
@@ -84,13 +84,17 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
     responses.append(mylist)
     yield responses, {}, {}, {}
     message.append({'role': 'user', 'content': prompt})
-    message.append({'role': 'assitant', 'content': answer})
+    if not function_call:
+        message.append({'role': 'assistant', 'content': answer})
     mylist = list()
     i = 0
     while function_call and i < 3:
-        print(f"i******{i}")
         function_name = function_call.get('name')
         function_parameters = json.loads(function_call.get('arguments'))
+        function_call_use = {'name':function_name, 'arguments':function_call.get('arguments')}
+        message.append({'role': 'assistant', 'content': answer, 'function_call':function_call_use})
+        print(f"i******{i}")
+        
         print(f"")
         yield responses, {function_name : 'running'}, {'parameters':function_parameters}, {} 
         try:
@@ -105,7 +109,7 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
         mylist.append(answer)
         responses.append(mylist)
         message.append({'role': 'function', 'name':function_name,'content': str(function_response)})
-        message.append({'role': 'assitant', 'content': answer})
+        message.append({'role': 'assistant', 'content': answer})
         i += 1
     return responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response
 def clear_session():

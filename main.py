@@ -12,9 +12,9 @@ def run_llm(prompt, history=[], functions=[], sys_prompt= f"You are an useful AI
         messages.extend(history)
         print(messages)
         if 'function_call_output' in prompt:
-            messages.append({"role": "function", "content": json.loads(prompt.replace('function_call_output: ', ''))})
+            messages.append({"role": "function",  'name':prompt.split("'s ")[0],"content": prompt.split('function_call_output: ')[1]})
         else:
-            messages.append({"role": "user", name:'', "content": "" + prompt})
+            messages.append({"role": "user", "content": "" + prompt})
         print(f'after messages********{messages}')
         response = openai.ChatCompletion.create(
             model = "qwen_tog",
@@ -70,7 +70,7 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
     if len(history) > 0:
         for history_msg in enumerate(history):
             if 'function_call_output' in history_msg[0]:
-                message.append({'role': 'function', 'content': history_msg[0]})
+                message.append({'role': 'function', 'name':history_msg[0].split("'s ")[0],'content': history_msg[0].split('function_call_output: ')[1]})
                 message.append({'role': 'assitant', 'content': history_msg[1]})
             else:
                 message.append({'role': 'user', 'content': history_msg[0]})
@@ -99,12 +99,12 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
         except Exception as e:
             function_response = {}
             yield responses, {function_name : 'error'}, {'parameters':function_parameters}, {"error":e}
-        new_prompt = 'function_call_output: ' + str(function_response)
+        new_prompt = function_name + "'s " + 'function_call_output: ' + str(function_response)
         mylist.append(new_prompt)
         answer, function_call = run_llm(prompt=new_prompt, history=message, functions=functions)
         mylist.append(answer)
         responses.append(mylist)
-        message.append({'role': 'function', 'content': function_response})
+        message.append({'role': 'function', 'name':function_name,'content': str(function_response)})
         message.append({'role': 'assitant', 'content': answer})
         i += 1
     return responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response

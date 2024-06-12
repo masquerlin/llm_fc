@@ -10,12 +10,11 @@ def run_llm(prompt, history=[], functions=[], function_name='',function_paramete
         openai.api_request_timeout = 1 # 设置超时时间为10秒
         messages = []
         messages.extend(history)
-        print(messages)
         if 'function_call_output' in prompt:
             messages.append({"role": "function",  'name':prompt.split("'s ")[0],"content": prompt.split('function_call_output: ')[1]})
         else:
             messages.append({"role": "user", "content": "" + prompt})
-        print(f'after messages********{messages}')
+        print(f'构造的messages********{messages}')
         response = openai.ChatCompletion.create(
             model = "qwen_tog",
             messages = messages,
@@ -25,12 +24,11 @@ def run_llm(prompt, history=[], functions=[], function_name='',function_paramete
             )
         data_res = response['choices'][0]['message']['content']
         function_call = response['choices'][0]['message']['function_call']
-        print(function_call)
         return data_res, function_call
     finally:
         torch_gc()
 def torch_gc():
-    print('清除内存')
+    print('清除gpu内存')
     if torch.cuda.is_available():
         with torch.cuda.device('cuda:0'):
             torch.cuda.empty_cache()
@@ -39,13 +37,14 @@ def process_function(function_call):
     if isinstance(function_call, dict):
         function_name = function_call.get('name')
         function_parameters = json.loads(function_call.get('arguments'))
-        print(f"function_parameters***********{function_parameters}")
-        print(type(function_parameters))
+        # 这种写法更有robust性，通用一点可以直接eval(function, **arguments) 就行
         if function_name == 'login':
+            print('use function login')
             login_account = function_parameters.get('login_account')
             password = function_parameters.get('password')
             result = api.login(login_account, password)
         if function_name == 'upload_compare_documents':
+            print('use function upload_compare_documents')
             file_a = function_parameters.get('file_a')
             file_b = function_parameters.get('file_b')
             is_a_ocr = function_parameters.get('is_a_ocr')
@@ -55,6 +54,7 @@ def process_function(function_call):
             token = function_parameters.get('token')
             result = api.upload_compare_documents(file_a, file_b, is_a_ocr, is_b_ocr, file_a_format, file_b_format, token)
         if function_name == 'word_to_pdf':
+            print('use function word_to_pdf')
             file_path = function_parameters.get('file_path')
             async_mode = function_parameters.get('async_mode')
             output_format = function_parameters.get('output_format')
@@ -68,7 +68,7 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
     responses = list()
     message=[{"role": "system", "content": sys_prompt}]
     if len(history) > 0:
-        for history_msg in enumerate(history):
+        for history_msg in history:
             if 'function_call_output' in history_msg[0]:
                 message.append({'role': 'function', 'name':history_msg[0].split("'s ")[0],'content': history_msg[0].split('function_call_output: ')[1]})
                 message.append({'role': 'assistant', 'content': history_msg[1]})
@@ -80,38 +80,54 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
     mylist.append(prompt)
 
     answer, function_call = run_llm(prompt=prompt, history=message, functions=functions)
+    print(f"first_answer********{answer}")
+    print(f"first_function_call********{function_call}")
     mylist.append(answer)
     responses.append(mylist)
     yield responses, {}, {}, {}
     message.append({'role': 'user', 'content': prompt})
     if not function_call:
         message.append({'role': 'assistant', 'content': answer})
+        function_name = ''
+        function_parameters = ''
+        function_response = {}
+    e_msg = ''
     mylist = list()
     i = 0
     while function_call and i < 3:
+        print(f"第******{i}***********轮")
         function_name = function_call.get('name')
-        function_parameters = json.loads(function_call.get('arguments'))
+        function_parameters = json.loads(function_call.get('arguments').replace('False', 'false').replace('True', 'true'))
         function_call_use = {'name':function_name, 'arguments':function_call.get('arguments')}
         message.append({'role': 'assistant', 'content': answer, 'function_call':function_call_use})
-        print(f"i******{i}")
         
-        print(f"")
         yield responses, {function_name : 'running'}, {'parameters':function_parameters}, {} 
         try:
             function_response = process_function(function_call)
             yield responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response
         except Exception as e:
-            function_response = {}
+            print(f"error*********{e}")
+            e_msg = str(e)
+            function_response = {"error":e_msg}
+            # function_response = {"result":'succeed'}
+            
             yield responses, {function_name : 'error'}, {'parameters':function_parameters}, {"error":e}
         new_prompt = function_name + "'s " + 'function_call_output: ' + str(function_response)
         mylist.append(new_prompt)
         answer, function_call = run_llm(prompt=new_prompt, history=message, functions=functions)
+        print(f"in_{i}_answer********{answer}")
+        print(f"in_{i}_function_call********{function_call}")
         mylist.append(answer)
         responses.append(mylist)
+        mylist = list()
         message.append({'role': 'function', 'name':function_name,'content': str(function_response)})
         message.append({'role': 'assistant', 'content': answer})
         i += 1
-    return responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response
+        yield responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response
+    if len(e_msg) > 0:
+        yield responses, {function_name : 'error'}, {'parameters':function_parameters}, {'error': e_msg}
+    else:
+        yield responses, {function_name : 'done'}, {'parameters':function_parameters}, function_response
 def clear_session():
     return '', [], {}, {}, {}
 def main():
@@ -138,6 +154,7 @@ def main():
 if __name__ == "__main__":
     main()
 
+#用getattr的方法获取函数, 也可以用eval的方法获取, 也可以用kernel的方法获取函数
 # parameters = {'num' : 2, 'xx':4}
 # function = getattr(api, 'add', None)
 # print(function)

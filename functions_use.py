@@ -70,7 +70,7 @@ functions = [
             'description': 'A文档是否是扫描件',
             'required': True,
             'schema': {
-                'type': 'boolean'
+                'type': 'string'
             }
         },
         {
@@ -78,7 +78,7 @@ functions = [
             'description': 'B文档是否是扫描件',
             'required': True,
             'schema': {
-                'type': 'boolean'
+                'type': 'string'
             }
         },
         {

@@ -1,5 +1,5 @@
 import openai, requests, torch
-from functions_use import functions
+from functions_use import functions, functions_other
 import api, json
 import gradio as gr
 
@@ -60,6 +60,16 @@ def process_function(function_call):
             output_format = function_parameters.get('output_format')
             input_format = function_parameters.get('input_format')
             result = api.word_to_pdf(file_path, async_mode, output_format, input_format)
+        if function_name == 'get_history_events':
+            print('use function get_history_events')
+            date = function_parameters.get('date')
+            result = api.get_history_events(date)
+        if function_name == 'get_holiday_info':
+            print('use function get_holiday_info')
+            date = function_parameters.get('date')
+            result = api.get_holiday_info(date)
+        if function_name == 'get_today_date':
+            result = api.get_today_date()
     else:
         result = ''
     return result
@@ -79,7 +89,7 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
     mylist = list()
     mylist.append(prompt)
 
-    answer, function_call = run_llm(prompt=prompt, history=message, functions=functions)
+    answer, function_call = run_llm(prompt=prompt, history=message, functions=functions_other)
     print(f"first_answer********{answer}")
     print(f"first_function_call********{function_call}")
     mylist.append(answer)
@@ -114,7 +124,7 @@ def model_chat(prompt, history=[], sys_prompt= f"You are an useful AI assistant 
             yield responses, {function_name : 'error'}, {'parameters':function_parameters}, {"error":e}
         new_prompt = function_name + "'s " + 'function_call_output: ' + str(function_response)
         mylist.append(new_prompt)
-        answer, function_call = run_llm(prompt=new_prompt, history=message, functions=functions)
+        answer, function_call = run_llm(prompt=new_prompt, history=message, functions=functions_other)
         print(f"in_{i}_answer********{answer}")
         print(f"in_{i}_function_call********{function_call}")
         mylist.append(answer)

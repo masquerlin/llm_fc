@@ -71,3 +71,73 @@ def word_to_pdf(file_path, async_mode, output_format, input_format):
 #     input_format="docx"
 # )
 # print(word2pdf_response)
+
+import requests
+
+def get_history_events(date):
+    """
+    调用聚合数据的历史上的今天事件列表API，根据指定日期获取历史事件列表。
+    
+    参数:
+    api_key (str): 你的API key。
+    date (str): 查询的日期，格式为'M/D'（例如'1/1'表示1月1日）。
+    
+    返回:
+    dict: API返回的响应结果。如果请求失败，返回包含错误信息的字典。
+    """
+    api_url = 'http://v.juhe.cn/todayOnhistory/queryEvent.php'
+    request_params = {
+        'key': '20f3ee5db3daabd25a2a3527856a4e65',
+        'date': date,
+    }
+    
+    response = requests.get(api_url, params=request_params)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {'error': '请求异常', 'status_code': response.status_code}
+
+
+
+import requests
+
+def get_holiday_info(date):
+    """
+    调用聚合数据的节假日安排查询API，根据指定日期获取节假日安排信息。
+    
+    参数:
+    api_key (str): 你的API key。
+    date (str): 查询的日期，格式为'YYYY-MM-DD'（例如'2021-05-09'）。
+    detail (str, optional): 详细信息参数，可选，默认值为空字符串。
+    
+    返回:
+    dict: API返回的响应结果。如果请求失败，返回包含错误信息的字典。
+    """
+    api_url = 'http://apis.juhe.cn/fapig/calendar/day'
+    request_params = {
+        'key': '8cbb780f1e5968959c4e1c0bce27843a',
+        'date': date,
+        'detail': '',
+    }
+    
+    response = requests.get(api_url, params=request_params)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {'error': '请求异常', 'status_code': response.status_code}
+
+
+from datetime import datetime
+
+def get_today_date():
+    """
+    获取当天日期，格式为'yyyy-mm-dd'。
+    
+    返回:
+    str: 当前日期，格式为'yyyy-mm-dd'。
+    """
+    today = datetime.today()
+    formatted_date = today.strftime('%Y-%m-%d')
+    return formatted_date

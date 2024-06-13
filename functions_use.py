@@ -189,3 +189,93 @@ functions = [
             }}}
 }
 ]
+
+
+functions_other = [
+    {
+    "name_for_human": "历史事件查询",
+    "name_for_model": "get_history_events",
+    "description_for_model": "当用户需要查询历史上的今天发生的事件时调用此函数",
+    "parameters": [
+        {
+            "name": "date",
+            "description": "查询的日期，格式为'M/D'（例如'1/1'表示1月1日）",
+            "required": True,
+            "schema": {
+                "type": "string"
+            }
+        }
+    ],
+    "returns": {
+        "type": "object",
+        "properties": {
+            "error_code": {"type": "integer", "description": "错误码，0表示正确返回"},
+            "msg": {"type": "string", "description": "描述信息"},
+            "data": {
+                "type": "object",
+                "properties": {
+                    "events": {
+                        "type": "array",
+                        "description": "历史事件列表",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string", "description": "事件标题"},
+                                "date": {"type": "string", "description": "事件日期"},
+                                "details": {"type": "string", "description": "事件详情"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+},
+{
+    "name_for_human": "节假日安排查询",
+    "name_for_model": "get_holiday_info",
+    "description_for_model": "当用户需要查询某天的节假日安排时调用此函数",
+    "parameters": [
+        {
+            "name": "date",
+            "description": "查询的日期，格式为'YYYY-MM-DD'（例如'2021-05-09'）",
+            "required": True,
+            "schema": {
+                "type": "string"
+            }
+        }
+    ],
+    "returns": {
+        "type": "object",
+        "properties": {
+            "error_code": {"type": "integer", "description": "错误码，0表示正确返回"},
+            "msg": {"type": "string", "description": "描述信息"},
+            "data": {
+                "type": "object",
+                "properties": {
+                    "holiday_info": {
+                        "type": "object",
+                        "description": "节假日安排信息",
+                        "properties": {
+                            "holiday_name": {"type": "string", "description": "节假日名称"},
+                            "is_holiday": {"type": "boolean", "description": "是否为节假日"},
+                            "holiday_details": {"type": "string", "description": "节假日详情"}
+                        }
+                    }
+                }
+            }
+        }
+    }
+},
+{
+    "name_for_human": "获取当天日期",
+    "name_for_model": "get_today_date",
+    "description_for_model": "当用户需要获取当前日期时调用此函数",
+    "parameters": [],
+    "returns": {
+        "type": "string",
+        "description": "当前日期，格式为'yyyy-mm-dd'"
+    }
+}
+
+]
